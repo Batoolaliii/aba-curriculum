@@ -1,8 +1,8 @@
 import os
 import uuid
-from boto3.dynamodb.conditions import Key
 
 import boto3
+from boto3.dynamodb.conditions import Key
 
 table = boto3.resource("dynamodb").Table(os.environ["TABLE_NAME"])
 
@@ -17,14 +17,17 @@ def save(employee_id: str, data: dict) -> dict:
     item = {
         "PK": "USER",
         "SK": employee_id,
+        "GSI1PK": "USER_BY_DATE",
+        "GSI1SK": data["startDate"],
         "employeeId": employee_id,
         "name": data["name"],
         "department": data["department"],
         "startDate": data["startDate"],
         "role": data.get("role", "employee"),
-     }
+    }
     table.put_item(Item=item)
     return item
+
 
 def get(employee_id: str) -> dict | None:
     response = table.get_item(Key={"PK": "USER", "SK": employee_id})
@@ -35,5 +38,21 @@ def list_all() -> list[dict]:
     response = table.query(KeyConditionExpression=Key("PK").eq("USER"))
     return response["Items"]
 
-def delete(employee_id: str) -> None:
-    table.delete_item(Key={"PK": "USER", "SK": employee_id})
+def list_by_hire_date(hired_from: str, hired_to: str) -> list[dict]:
+    response = table.query(
+        IndexName="GSI1",
+        KeyConditionExpression=Key("GSI1PK").eq("USER_BY_DATE")
+        & Key("GSI1SK").between(hired_from, hired_to))
+    return response["Items"]
+
+def list_by_hire_date(hired_from: str | None, hired_to: str | None) -> list[dict]:
+    condition = Key("GSI1PK").eq("USER_BY_DATE")
+    if hired_from and hired_to:
+        condition = condition & Key("GSI1SK").between(hired_from, hired_to)
+    elif hired_from:
+        condition = condition & Key("GSI1SK").gte(hired_from)
+    elif hired_to:
+        condition = condition & Key("GSI1SK").lte(hired_to)
+
+    response = table.query(IndexName="GSI1", KeyConditionExpression=condition)
+    return response["Items"]

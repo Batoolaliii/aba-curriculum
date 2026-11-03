@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException
-
-
+from datetime import date
 from models import EmployeeIn
 from services import employee_service
 
@@ -11,8 +10,16 @@ router = APIRouter(tags=["employees"])
 def create_employee(payload: EmployeeIn):
     return employee_service.create(payload.model_dump(mode="json"))
 
+
 @router.get("/employees")
-def list_employees():
+def list_employees(hiredFrom: date | None = None, hiredTo: date | None = None):
+    if hiredFrom and hiredTo:
+        return {
+            "employees": employee_service.list_by_hire_date(
+                hiredFrom.isoformat(), hiredTo.isoformat()
+            )
+        }
+
     return {"employees": employee_service.list_all()}
 
 
@@ -22,23 +29,22 @@ def get_employee(employee_id: str):
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
 
-@router.delete("/employees/{employee_id}")
-def delete_employee(employee_id: str):
-    employee_service.delete(employee_id)
-    return {"deleted": employee_id}
-    
-
-@router.put("/employees/{employee_id}")
-def save_employee(employee_id: str, payload: EmployeeIn):
-    return employee_service.save(employee_id, payload.model_dump(mode="json"))
+    return employee
 
 
 @router.get("/employees")
-def list_employees():
-    employees = employee_service.list_all()
-    return {"employees": employees, "count": len(employees)}
-    
-  
+def list_employees(hiredFrom: date | None = None, hiredTo: date | None = None):
+    if hiredFrom or hiredTo:
+        return {
+            "employees": employee_service.list_by_hire_date(
+                hiredFrom.isoformat() if hiredFrom else None,
+                hiredTo.isoformat() if hiredTo else None,
+            )
+        }
+
+    return {"employees": employee_service.list_all()}
+
+
    
 
     
