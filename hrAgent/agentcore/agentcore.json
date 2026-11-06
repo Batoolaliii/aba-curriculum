@@ -10,7 +10,12 @@
       "entrypoint": "main.py",
       "codeLocation": "app/agent",
       "dockerfile": "Dockerfile",
-      "protocol": "HTTP"
+      "protocol": "HTTP",
+      "envVars": [
+            {"name" : "TABLE_NAME", "value": "HrLeavePortalBackend-HrTable0964620C-X7EJE80PTPNI" },
+            { "name": "HR_EMAIL_TOPIC_ARN", "value": "arn:aws:sns:us-east-1:916981870264:HrLeavePortalNotifications-HrEmailTopic915EFFDB-8oNvYwaNoMT6" },
+              {"name" : "AWS_DEFAULT_REGION", "value": "us-east-1" }
+          ]
     }
   ],
   "memories": [

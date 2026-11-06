@@ -1,16 +1,29 @@
 from functools import lru_cache
-
+from strands import Agent
 from strands import Agent, tool
 from strands.agent.conversation_manager.null_conversation_manager import NullConversationManager
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from model.load import load_model
 from parse import parse_payload
 from memory.session import get_memory_session_manager
-
+from tools import email_tools, employee_tools, leave_tools
 DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant. Use tools when appropriate."
 
 # Define a collection of tools used by the model
-tools = []
+tools = [# Employee tools
+    employee_tools.create_employee,
+    employee_tools.save_employee,
+    employee_tools.get_employee,
+    employee_tools.list_employees,
+    employee_tools.list_employees_by_hire_date,
+    employee_tools.delete_employee,
+    # Leave tools
+    leave_tools.save_leave,
+    leave_tools.list_leave,
+    # Email tools
+    email_tools.generate_leave_email,
+    email_tools.send_email_to_hr,
+]
 
 # Define a simple function tool
 @tool
