@@ -79,4 +79,5 @@ class AgentRuntimeStack(Stack):
                 ])
         )
 
+        self.agent_runtime_arn = agent_runtime.agent_runtime_arn
         CfnOutput(self, "AgentRuntimeArn", value=agent_runtime.agent_runtime_arn)

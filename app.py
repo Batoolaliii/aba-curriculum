@@ -4,6 +4,7 @@ from hr_leave_portal.agent_runtime_stack import AgentRuntimeStack
 from hr_leave_portal.backend_stack import BackendStack
 from hr_leave_portal.notification_stack import NotificationStack
 from hr_leave_portal.state_machine_stack import StateMachineStack
+from hr_leave_portal.ui_stack import UiStack
 
 app = cdk.App()
 
@@ -17,13 +18,25 @@ state_machine = StateMachineStack(
     api_function=backend.api_function
 )
 
-AgentRuntimeStack(
+agent = AgentRuntimeStack(
     app,
     "HrLeavePortalAgentRuntime",
     table=backend.table,
     hr_email_topic=notifications.hr_email_topic,
     user_pool=backend.user_pool,
     user_pool_client=backend.user_pool_client
+)
+
+UiStack(
+    app,
+    "HrLeavePortalUi",
+    api_url=backend.api.url,
+    user_pool_id=backend.user_pool.user_pool_id,
+    user_pool_client_id=backend.user_pool_client.user_pool_client_id,
+    # Reuse the deployed stack's public output without requiring an agent update.
+    agent_runtime_arn=cdk.Fn.get_stack_output(
+        agent.stack_name, "AgentRuntimeArn", region=cdk.Aws.REGION
+    ),
 )
 
 app.synth()

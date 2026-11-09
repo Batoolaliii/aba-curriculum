@@ -1,21 +1,22 @@
 import aws_cdk as core
 import aws_cdk.assertions as assertions
-from hr_leave_portal.hr_leave_portal_stack import HrLeavePortalStack
+from hr_leave_portal.backend_stack import BackendStack
+from hr_leave_portal.notification_stack import NotificationStack
 
 
-def test_sqs_queue_created():
+def test_existing_backend_resources():
     app = core.App()
-    stack = HrLeavePortalStack(app, "hr-leave-portal")
+    stack = BackendStack(app, "HrLeavePortalBackend")
     template = assertions.Template.from_stack(stack)
 
-    template.has_resource_properties("AWS::SQS::Queue", {
-        "VisibilityTimeout": 300
-    })
+    template.resource_count_is("AWS::DynamoDB::Table", 1)
+    template.resource_count_is("AWS::Cognito::UserPool", 1)
+    template.resource_count_is("AWS::ApiGateway::RestApi", 1)
 
 
 def test_sns_topic_created():
     app = core.App()
-    stack = HrLeavePortalStack(app, "hr-leave-portal")
+    stack = NotificationStack(app, "HrLeavePortalNotifications")
     template = assertions.Template.from_stack(stack)
 
     template.resource_count_is("AWS::SNS::Topic", 1)
