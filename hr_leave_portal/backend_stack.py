@@ -6,6 +6,7 @@ from aws_cdk import (
     aws_apigateway as apigw,
     aws_cognito as cognito,
     aws_dynamodb as dynamodb,
+    aws_iam as iam,
     aws_lambda as lambda_,
     aws_ssm as ssm,
 )
@@ -25,7 +26,9 @@ class BackendStack(Stack):
             partition_key=dynamodb.Attribute(
                 name="PK", type=dynamodb.AttributeType.STRING
             ),
-            sort_key=dynamodb.Attribute(name="SK", type=dynamodb.AttributeType.STRING),
+            sort_key=dynamodb.Attribute(
+                name="SK", type=dynamodb.AttributeType.STRING
+            ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY,
         )
@@ -66,9 +69,24 @@ class BackendStack(Stack):
             tracing=lambda_.Tracing.ACTIVE,
         )
 
-        table.grant_read_write_data(api_function)
+        api_function.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:Query",
+                    "dynamodb:DeleteItem",
+                ],
+                resources=[
+                    table.table_arn,
+                    f"{table.table_arn}/index/*",
+                ],
+            )
+        )
+
         self.api_function = api_function
         self.table = table
+
         self.user_pool = cognito.UserPool(
             self,
             "HrUserPool",
@@ -79,11 +97,16 @@ class BackendStack(Stack):
 
         self.user_pool_client = self.user_pool.add_client(
             "HrUserPoolClient",
-            auth_flows=cognito.AuthFlow(user_password=True, user_srp=True),
+            auth_flows=cognito.AuthFlow(
+                user_password=True,
+                user_srp=True,
+            ),
         )
 
         authorizer = apigw.CognitoUserPoolsAuthorizer(
-            self, "HrAuthorizer", cognito_user_pools=[self.user_pool]
+            self,
+            "HrAuthorizer",
+            cognito_user_pools=[self.user_pool],
         )
 
         self.api = apigw.LambdaRestApi(
@@ -104,5 +127,7 @@ class BackendStack(Stack):
         CfnOutput(self, "TableName", value=table.table_name)
         CfnOutput(self, "UserPoolId", value=self.user_pool.user_pool_id)
         CfnOutput(
-            self, "UserPoolClientId", value=self.user_pool_client.user_pool_client_id
+            self,
+            "UserPoolClientId",
+            value=self.user_pool_client.user_pool_client_id,
         )
