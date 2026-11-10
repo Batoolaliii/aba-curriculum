@@ -34,3 +34,4 @@ def list_for_employee(employee_id: str, month: str | None) -> list[dict]:
 
     response = table.query(KeyConditionExpression=condition)
     return response["Items"]
+    return response["Items"]
