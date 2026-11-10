@@ -17,8 +17,18 @@ LAYER_ARN_PARAM = "/hr-leave-portal/fastapi-layer-arn"
 
 
 class BackendStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        ui_origin: str | None = None,
+        **kwargs,
+    ) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        allowed_origins = ["http://localhost:5173"]
+        if ui_origin:
+            allowed_origins.append(ui_origin)
 
         table = dynamodb.Table(
             self,
@@ -30,6 +40,10 @@ class BackendStack(Stack):
                 name="SK", type=dynamodb.AttributeType.STRING
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            encryption=dynamodb.TableEncryption.AWS_MANAGED,
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True,
+            ),
             removal_policy=RemovalPolicy.DESTROY,
         )
 
@@ -68,6 +82,9 @@ class BackendStack(Stack):
             },
             tracing=lambda_.Tracing.ACTIVE,
         )
+
+        if ui_origin:
+            api_function.add_environment("UI_ORIGIN", ui_origin)
 
         api_function.add_to_role_policy(
             iam.PolicyStatement(
@@ -114,8 +131,8 @@ class BackendStack(Stack):
             "HrApi",
             handler=api_function,
             default_cors_preflight_options=apigw.CorsOptions(
-                allow_origins=apigw.Cors.ALL_ORIGINS,
-                allow_methods=apigw.Cors.ALL_METHODS,
+                allow_origins=allowed_origins,
+                allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             ),
             default_method_options=apigw.MethodOptions(
                 authorization_type=apigw.AuthorizationType.COGNITO,
