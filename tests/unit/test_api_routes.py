@@ -15,7 +15,7 @@ def client(monkeypatch):
     services = {}
     for name in ("employee_service", "leave_service", "hr_request_service"):
         module = ModuleType(f"services.{name}")
-        for method in ("create", "get", "list_all", "list_by_hire_date", "save", "list_for_employee", "start_hr_request", "start_time_off_request"):
+        for method in ("create", "get", "delete", "list_all", "list_by_hire_date", "save", "list_for_employee", "start_hr_request", "start_time_off_request"):
             setattr(module, method, Mock())
         monkeypatch.setitem(sys.modules, f"services.{name}", module)
         monkeypatch.setattr(package, name, module, raising=False)
@@ -117,3 +117,74 @@ def test_hire_date_lookup_propagates_database_errors(employee_service):
     table.query.side_effect = RuntimeError("database unavailable")
     with pytest.raises(RuntimeError, match="database unavailable"):
         service.list_by_hire_date(None, None)
+
+
+def caller_client(http, sub, groups=""):
+    # Exercise the real auth helpers with Gateway claims, not local admin fallback.
+    async def app(scope, receive, send):
+        scope = {**scope, "aws.event": {"requestContext": {"authorizer": {
+            "claims": {"sub": sub, "cognito:groups": groups}
+        }}}}
+        await http.app(scope, receive, send)
+    return TestClient(app)
+
+
+@pytest.mark.parametrize("sub,groups", [("owner-sub", ""), ("other-sub", "admins")])
+def test_delete_employee_allows_owner_or_admin(client, sub, groups):
+    http, services = client
+    employees = services["employee_service"]
+    records = {"e1": {"employeeId": "e1", "cognitoSub": "owner-sub"}}
+    employees.get.side_effect = records.get
+    employees.delete.side_effect = lambda employee_id: records.pop(employee_id)
+    response = caller_client(http, sub, groups).delete("/employees/e1")
+    assert response.status_code == 200
+    assert response.json() == {"deleted": "e1"}
+    employees.get.assert_called_once_with("e1")
+    employees.delete.assert_called_once_with("e1")
+    assert "e1" not in records
+
+
+@pytest.mark.parametrize("record", [
+    {"employeeId": "e1", "cognitoSub": "owner-sub"}, {"employeeId": "e1"},
+])
+def test_delete_employee_rejects_non_owner_without_deleting(client, record):
+    http, services = client
+    employees = services["employee_service"]
+    records = {"e1": record.copy()}
+    employees.get.side_effect = records.get
+    employees.delete.side_effect = lambda employee_id: records.pop(employee_id)
+    response = caller_client(http, "non-owner", "employees").delete("/employees/e1")
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Employee not found"}
+    employees.delete.assert_not_called()
+    assert records == {"e1": record}
+
+
+def test_delete_missing_employee_returns_404_without_deleting(client):
+    http, services = client
+    services["employee_service"].get.return_value = None
+    response = caller_client(http, "admin-sub", "admins").delete("/employees/missing")
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Employee not found"}
+    services["employee_service"].delete.assert_not_called()
+
+
+@pytest.mark.parametrize("query,start,end", [
+    ("hiredFrom=2026-01-01&hiredTo=2026-12-31", "2026-01-01", "2026-12-31"),
+    ("hiredFrom=2026-01-01", "2026-01-01", None),
+    ("hiredTo=2026-12-31", None, "2026-12-31"),
+])
+def test_single_list_route_preserves_hire_date_filters(client, query, start, end):
+    http, services = client
+    employees = services["employee_service"]
+    employees.list_by_hire_date.return_value = [{"employeeId": "e1"}]
+    response = caller_client(http, "non-owner").get(f"/employees?{query}")
+    assert response.status_code == 200
+    assert response.json() == {"employees": [{"employeeId": "e1"}]}
+    employees.list_by_hire_date.assert_called_once_with(start, end)
+    employees.list_all.assert_not_called()
+    router = importlib.import_module("controllers.employee_controller").router
+    routes = [route for route in router.routes
+              if getattr(route, "path", None) == "/employees"
+              and "GET" in getattr(route, "methods", set())]
+    assert len(routes) == 1

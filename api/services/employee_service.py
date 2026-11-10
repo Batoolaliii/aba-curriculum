@@ -12,6 +12,13 @@ table = boto3.resource("dynamodb").Table(os.environ["TABLE_NAME"])
 
 
 @tracer.capture_method
+def delete(employee_id: str) -> None:
+    """Delete the employee item without deleting its separate leave partition."""
+    logger.info("deleting employee", employee_id=employee_id)
+    table.delete_item(Key={"PK": "USER", "SK": employee_id})
+
+
+@tracer.capture_method
 def create(data: dict) -> dict:
     """Create an employee with a generated id."""
     logger.info("creating employee", department=data.get("department"))

@@ -143,3 +143,16 @@ def test_save_defaults_role_to_employee(employee_service, table):
     # Assert
     assert result["role"] == "employee"
     assert stored["role"] == "employee"
+
+
+def test_delete_removes_only_requested_employee(employee_service, table):
+    employee_service.save("employee1", employee_data())
+    employee_service.save("employee2", employee_data())
+    leave = {"PK": "employee1", "SK": "2026-10-29", "note": "Leave"}
+    table.put_item(Item=leave)
+
+    employee_service.delete("employee1")
+
+    assert "Item" not in table.get_item(Key={"PK": "USER", "SK": "employee1"})
+    assert table.get_item(Key={"PK": "USER", "SK": "employee2"})["Item"]["employeeId"] == "employee2"
+    assert table.get_item(Key={"PK": "employee1", "SK": "2026-10-29"})["Item"] == leave
