@@ -1,8 +1,10 @@
 from aws_cdk import (
+    Acknowledgment,
     CfnOutput,
     Duration,
     RemovalPolicy,
     Stack,
+    Validations,
     aws_apigateway as apigw,
     aws_cognito as cognito,
     aws_dynamodb as dynamodb,
@@ -147,4 +149,19 @@ class BackendStack(Stack):
             self,
             "UserPoolClientId",
             value=self.user_pool_client.user_pool_client_id,
+        )
+
+        # Findings we've read and decided to accept.
+        Validations.of(self).acknowledge(
+            Acknowledgment(
+                id="AwsSolutions::AwsSolutions-COG2",
+                reason="WORKSHOP ONLY. MFA is not enabled to keep sign-in to one step. A real "
+                       "HR system must enable it, see /security/conclusion/.",
+            ),
+            Acknowledgment(
+                id="AwsSolutions::AwsSolutions-APIG4",
+                reason="Fires on CORS preflight OPTIONS methods, which must be unauthenticated. "
+                       "Every other method inherits the Cognito authorizer through "
+                       "default_method_options.",
+            ),
         )
