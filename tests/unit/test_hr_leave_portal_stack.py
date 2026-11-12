@@ -1,5 +1,6 @@
 import aws_cdk as core
 import aws_cdk.assertions as assertions
+
 from hr_leave_portal.backend_stack import BackendStack
 from hr_leave_portal.notification_stack import NotificationStack
 
@@ -15,7 +16,7 @@ def test_existing_backend_resources():
 
 
 def test_sns_topic_created():
-    app = core.App()
+    app = core.App(context={"hrEmail": "hr@example.com"})
     stack = NotificationStack(app, "HrLeavePortalNotifications")
     template = assertions.Template.from_stack(stack)
 
