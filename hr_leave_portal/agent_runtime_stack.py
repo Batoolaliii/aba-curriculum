@@ -3,6 +3,7 @@ from aws_cdk import (
     CfnOutput,
     Fn,
     Stack,
+    aws_bedrock as bedrock,
     aws_bedrockagentcore as agentcore,
     aws_cognito as cognito,
     aws_dynamodb as dynamodb,
@@ -49,6 +50,39 @@ class AgentRuntimeStack(Stack):
             user_pool, [user_pool_client]
         )
 
+        guardrail = bedrock.CfnGuardrail(
+            self,
+            "HrAgentGuardrail",
+            name="hr-agent-guardrail",
+            blocked_input_messaging="I can't help with that request.",
+            blocked_outputs_messaging="I can't share that.",
+            sensitive_information_policy_config=bedrock.CfnGuardrail.SensitiveInformationPolicyConfigProperty(
+                pii_entities_config=[
+                    bedrock.CfnGuardrail.PiiEntityConfigProperty(
+                        type="EMAIL",
+                        action="ANONYMIZE",
+                    ),
+                    bedrock.CfnGuardrail.PiiEntityConfigProperty(
+                        type="PHONE",
+                        action="ANONYMIZE",
+                    ),
+                    bedrock.CfnGuardrail.PiiEntityConfigProperty(
+                        type="US_SOCIAL_SECURITY_NUMBER",
+                        action="BLOCK",
+                    ),
+                ],
+            ),
+            content_policy_config=bedrock.CfnGuardrail.ContentPolicyConfigProperty(
+                filters_config=[
+                    bedrock.CfnGuardrail.ContentFilterConfigProperty(
+                        type="PROMPT_ATTACK",
+                        input_strength="HIGH",
+                        output_strength="NONE",
+                    ),
+                ],
+            ),
+        )
+
         agent_runtime = agentcore.Runtime(
             self,
             "HrAgentRuntime",
@@ -59,7 +93,16 @@ class AgentRuntimeStack(Stack):
             environment_variables={
                 "TABLE_NAME": table.table_name,
                 "HR_EMAIL_TOPIC_ARN": hr_email_topic.topic_arn,
+                "GUARDRAIL_ID": guardrail.attr_guardrail_id,
+                "GUARDRAIL_VERSION": guardrail.attr_version,
             },
+        )
+
+        agent_runtime.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["bedrock:ApplyGuardrail"],
+                resources=[guardrail.attr_guardrail_arn],
+            )
         )
 
         agent_runtime.add_to_role_policy(
